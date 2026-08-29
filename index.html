@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mes repas & courses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #201a15;
+    --surface: #2b241d;
+    --surface-2: #342c23;
+    --border: #453a2d;
+    --wood: #c9a876;
+    --wood-soft: #a8916f;
+    --copper: #b0703f;
+    --copper-hover: #c98652;
+    --sage: #7c8a6b;
+    --text: #f2e9dc;
+    --text-dim: #a89a85;
+    --danger: #b5533f;
+    --radius: 12px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Work Sans', sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  header{
+    padding:28px 32px 0;
+    max-width:960px;
+    margin:0 auto;
+  }
+  header p.tag{
+    color:var(--wood);
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    margin:0 0 6px;
+  }
+  nav{
+    display:flex;
+    gap:6px;
+    max-width:960px;
+    margin:24px auto 0;
+    padding:0 32px;
+    border-bottom:1px solid var(--border);
+  }
+  nav button{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-family:'Work Sans',sans-serif;
+    font-size:14px;
+    padding:12px 16px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  nav button.active{
+    color:var(--wood);
+    border-bottom:2px solid var(--copper);
+  }
+  main{
+    max-width:960px;
+    margin:0 auto;
+    padding:28px 32px 80px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .grid-cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:14px;
+  }
+  .recipe-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+    cursor:pointer;
+    transition:border-color .15s;
+  }
+  .recipe-card:hover{border-color:var(--wood-soft);}
+  .recipe-card .type{
+    font-size:10px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--wood);
+  }
+  .recipe-card .name{
+    font-family:'Fraunces',serif;
+    font-size:17px;
+    margin-top:4px;
+  }
+  button.primary{
+    background:var(--copper);
+    color:#241d18;
+    border:none;
+    padding:10px 18px;
+    border-radius:8px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:'Work Sans',sans-serif;
+  }
+  button.primary:hover{background:var(--copper-hover);}
+  button.ghost{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--wood-soft);}
+  button.icon{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--wood);
+    width:28px;height:28px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:14px;
+    line-height:1;
+  }
+  input, select, textarea{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:9px 12px;
+    border-radius:8px;
+    font-family:'Work Sans',sans-serif;
+    font-size:14px;
+  }
+  input:focus, select:focus, textarea:focus{outline:1px solid var(--wood-soft);}
+  label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;}
+  table{width:100%;border-collapse:collapse;}
+  th{
+    text-align:left;
+    font-size:11px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    padding:8px 6px;
+    border-bottom:1px solid var(--border);
+  }
+  td{padding:8px 6px;border-bottom:1px solid var(--border);font-size:14px;}
+  .nutri-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;}
+  .nutri-item{background:var(--surface-2);border-radius:8px;text-align:center;padding:10px 4px;}
+  .nutri-item .val{font-size:15px;font-weight:600;color:var(--text);}
+  .nutri-item .lbl{font-size:10px;color:var(--text-dim);margin-top:2px;}
+  .portions-control{display:flex;align-items:center;gap:14px;background:var(--surface-2);border-radius:10px;padding:10px 14px;}
+  .ingredient-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .ingredient-row .name{flex:1;}
+  .ingredient-row .qty{width:70px;text-align:right;}
+  .lock-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-dim);}
+  .lock-btn.locked{color:var(--copper);}
+  .planning-grid{display:grid;grid-template-columns:110px repeat(7,1fr);gap:6px;font-size:13px;}
+  .planning-grid .head{color:var(--wood);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 4px;}
+  .planning-grid .slot-label{color:var(--text-dim);padding:8px 4px;}
+  .planning-grid select{width:100%;font-size:12px;padding:6px 8px;}
+  .day-check{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;}
+  .day-check.active{border-color:var(--copper);color:var(--wood);}
+  .shopping-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);}
+  .shopping-item.checked span{text-decoration:line-through;color:var(--text-dim);}
+  .badge{font-size:10px;background:var(--surface-2);color:var(--wood);padding:3px 8px;border-radius:20px;}
+  .empty{color:var(--text-dim);font-size:14px;padding:20px 0;text-align:center;}
+  .status{font-size:12px;color:var(--text-dim);margin-top:8px;}
+  .modal-bg{position:fixed;inset:0;background:rgba(10,8,6,.6);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:10;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:520px;width:100%;}
+  textarea.export{width:100%;height:180px;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<header>
+  <p class="tag">Cuisine & planning</p>
+  <h1>Mes repas & courses</h1>
+</header>
+
+<nav id="nav"></nav>
+<main id="main"></main>
+
+<script>
+/* ================== CONFIGURATION ================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbwG1vsB6Y-5-R621aicOMYbnykNNf81D_ol3-eoNYHiduHEHbGinT5wIWMFXsvxvZkr/exec";
+const JOURS = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+const CRENEAUX = ["Petit dejeuner","Collation matin","Dejeuner","Collation apres-midi","Diner"];
+const CRENEAUX_LABEL = {"Petit dejeuner":"Petit-déj","Collation matin":"Collation","Dejeuner":"Déjeuner","Collation apres-midi":"Collation","Diner":"Dîner"};
+
+/* ================== STATE ================== */
+let state = { ingredients: [], recettes: [], recetteIngredients: [], planning: [], listeCourses: [] };
+let currentTab = 'recettes';
+let openRecipeId = null;
+let workingPortions = {}; // recette_id -> portions actuellement affichees
+
+/* ================== API HELPERS ================== */
+async function apiGet(action){
+  const res = await fetch(`${API_URL}?action=${action}`);
+  return res.json();
+}
+async function apiPost(action, payload){
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body: JSON.stringify({action, ...payload})
+  });
+  return res.json();
+}
+
+async function loadAll(){
+  document.getElementById('main').innerHTML = `<p class="empty">Chargement des données…</p>`;
+  try{
+    const data = await apiGet('getAll');
+    if(data.error){ throw new Error(data.error); }
+    state = data;
+    render();
+  }catch(e){
+    document.getElementById('main').innerHTML = `
+      <div class="card">
+        <h3 style="color:var(--danger);">Impossible de charger les données</h3>
+        <p style="color:var(--text-dim);">Détail technique : ${e.message}</p>
+        <p style="color:var(--text-dim);">Cause probable : ce fichier est ouvert en local (file://) et le navigateur bloque l'appel vers le script Google (restriction CORS). Ouvre la console du navigateur (Safari : menu Développement > Afficher la console JavaScript) pour voir le détail exact, et vois avec Claude le contournement (héberger le fichier au lieu de l'ouvrir directement).</p>
+      </div>`;
+  }
+}
+
+function setStatus(msg){
+  const el = document.getElementById('status');
+  if(el) el.textContent = msg;
+}
+
+/* ================== NUTRITION / QUANTITE ================== */
+function ingredientById(id){ return state.ingredients.find(i => i.id === id); }
+function recetteById(id){ return state.recettes.find(r => r.id === id); }
+function riForRecette(recetteId){ return state.recetteIngredients.filter(ri => ri.recette_id === recetteId); }
+
+// quantite pour un nombre de portions donne, a partir de la reference stockee
+function scaledQty(ri, portions){
+  const ref = parseFloat(ri.quantite_reference) || 0;
+  const refPortions = parseFloat(ri.portions_reference) || 1;
+  return ref / refPortions * portions;
+}
+
+// contribution nutrition d'une ligne ingredient, pour 1 personne
+function nutritionPerPersonForRow(ri){
+  const ing = ingredientById(ri.ingredient_id);
+  if(!ing) return {cal:0,prot:0,gluc:0,lip:0};
+  const perPersonQty = scaledQty(ri, 1);
+  const factor = ing.unite_reference === 'unite' ? perPersonQty : perPersonQty/100;
+  return {
+    cal: factor * (parseFloat(ing.calories_100)||0),
+    prot: factor * (parseFloat(ing.proteines_100g)||0),
+    gluc: factor * (parseFloat(ing.glucides_100g)||0),
+    lip: factor * (parseFloat(ing.lipides_100g)||0)
+  };
+}
+
+function nutritionTotalsPerPerson(recetteId){
+  const rows = riForRecette(recetteId);
+  return rows.reduce((acc,ri)=>{
+    const n = nutritionPerPersonForRow(ri);
+    acc.cal+=n.cal; acc.prot+=n.prot; acc.gluc+=n.gluc; acc.lip+=n.lip;
+    return acc;
+  },{cal:0,prot:0,gluc:0,lip:0});
+}
+
+/* ================== RENDER: NAV ================== */
+function render(){
+  const nav = document.getElementById('nav');
+  const tabs = [['recettes','Recettes'],['planning','Planning'],['courses','Liste de courses']];
+  nav.innerHTML = tabs.map(([id,label])=>
+    `<button class="${currentTab===id?'active':''}" data-tab="${id}">${label}</button>`
+  ).join('');
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; openRecipeId=null; render();});
+
+  const main = document.getElementById('main');
+  if(currentTab==='recettes') main.innerHTML = renderRecettesTab();
+  if(currentTab==='planning') main.innerHTML = renderPlanningTab();
+  if(currentTab==='courses') main.innerHTML = renderCoursesTab();
+  main.insertAdjacentHTML('beforeend', `<p class="status" id="status"></p>`);
+  attachHandlers();
+}
+
+/* ================== RECETTES ================== */
+function renderRecettesTab(){
+  if(openRecipeId) return renderRecipeDetail(openRecipeId);
+  const cards = state.recettes.map(r=>`
+    <div class="recipe-card" data-open="${r.id}">
+      <div class="type">${r.type||''}</div>
+      <div class="name">${r.nom}</div>
+      <div class="badge">${r.portions_base} pers.</div>
+    </div>`).join('');
+  return `
+    <div class="row" style="justify-content:space-between;margin-bottom:16px;">
+      <h2>Recettes (${state.recettes.length})</h2>
+      <button class="primary" id="btn-new-recipe">+ Nouvelle recette</button>
+    </div>
+    <div class="grid-cards">${cards || '<p class="empty">Aucune recette.</p>'}</div>
+  `;
+}
+
+function renderRecipeDetail(id){
+  const r = recetteById(id);
+  if(!r) { openRecipeId=null; return renderRecettesTab(); }
+  const base = parseInt(r.portions_base)||4;
+  const portions = workingPortions[id] || base;
+  const rows = riForRecette(id);
+  const nutri = nutritionTotalsPerPerson(id);
+
+  const ingRows = rows.map(ri=>{
+    const ing = ingredientById(ri.ingredient_id);
+    const qty = scaledQty(ri, portions);
+    return `
+      <div class="ingredient-row" data-ri="${ri.id}">
+        <span class="name">${ing? ing.nom : ri.ingredient_id}</span>
+        <input class="qty" type="number" step="any" value="${round1(qty)}" data-ri-qty="${ri.id}">
+        <span style="width:34px;color:var(--text-dim);font-size:12px;">${ing?ing.unite_reference:''}</span>
+        <button class="lock-btn" data-lock="${ri.id}" title="Forcer cette quantité pour ${portions} personnes">🔒</button>
+      </div>`;
+  }).join('');
+
+  return `
+    <button class="ghost" id="btn-back" style="margin-bottom:16px;">← Retour aux recettes</button>
+    <h2>${r.nom}</h2>
+    <p style="color:var(--text-dim);margin-top:0;">${r.type} · ${r.temps_preparation_min||'?'} min</p>
+
+    <div class="card">
+      <div class="portions-control">
+        <span>Portions</span>
+        <div class="row" style="margin-left:auto;gap:14px;">
+          <button class="icon" id="btn-minus">–</button>
+          <strong>${portions}</strong>
+          <button class="icon" id="btn-plus">+</button>
+        </div>
+      </div>
+
+      <h3 style="margin-top:20px;">Ingrédients</h3>
+      ${ingRows || '<p class="empty">Aucun ingrédient.</p>'}
+
+      <div class="nutri-grid">
+        <div class="nutri-item"><div class="val">${Math.round(nutri.cal)}</div><div class="lbl">kcal / pers.</div></div>
+        <div class="nutri-item"><div class="val">${round1(nutri.prot)} g</div><div class="lbl">protéines</div></div>
+        <div class="nutri-item"><div class="val">${round1(nutri.gluc)} g</div><div class="lbl">glucides</div></div>
+        <div class="nutri-item"><div class="val">${round1(nutri.lip)} g</div><div class="lbl">lipides</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Préparation</h3>
+      <p style="color:var(--text-dim);white-space:pre-line;">${r.etapes||'—'}</p>
+    </div>
+  `;
+}
+
+function round1(n){ return Math.round(n*10)/10; }
+
+/* ================== PLANNING ================== */
+function planningRow(jour, creneau){
+  return state.planning.find(p=>p.jour===jour && p.creneau===creneau);
+}
+
+function renderPlanningTab(){
+  const options = `<option value="">—</option>` + state.recettes.map(r=>`<option value="${r.id}">${r.nom}</option>`).join('');
+  const headRow = `<div class="head"></div>` + JOURS.map(j=>`<div class="head">${j}</div>`).join('');
+  const bodyRows = CRENEAUX.map(cr=>{
+    const cells = JOURS.map(j=>{
+      const p = planningRow(j,cr);
+      const val = p ? p.recette_id : '';
+      return `<select data-plan-jour="${j}" data-plan-creneau="${cr}">${options.replace(`value="${val}"`, `value="${val}" selected`)}</select>`;
+    }).join('');
+    return `<div class="slot-label">${CRENEAUX_LABEL[cr]}</div>${cells}`;
+  }).join('');
+
+  return `
+    <h2>Planning de la semaine</h2>
+    <div class="card" style="overflow-x:auto;">
+      <div class="planning-grid">${headRow}${bodyRows}</div>
+    </div>
+  `;
+}
+
+/* ================== LISTE DE COURSES ================== */
+let selectedDays = new Set(JOURS);
+let generatedList = [];
+
+function renderCoursesTab(){
+  const dayChips = JOURS.map(j=>`
+    <div class="day-check ${selectedDays.has(j)?'active':''}" data-day="${j}">${j.slice(0,3)}</div>
+  `).join('');
+
+  const items = generatedList.map((it,idx)=>`
+    <div class="shopping-item ${it.checked?'checked':''}" data-item="${idx}">
+      <input type="checkbox" ${it.checked?'checked':''} data-check="${idx}">
+      <span>${it.nom} — ${round1(it.qty)} ${it.unite}</span>
+    </div>
+  `).join('');
+
+  return `
+    <h2>Liste de courses</h2>
+    <div class="card">
+      <p style="color:var(--text-dim);margin-top:0;">Choisis les jours à inclure :</p>
+      <div class="row">${dayChips}</div>
+      <div class="row" style="margin-top:16px;">
+        <button class="primary" id="btn-generate">Générer la liste</button>
+        ${generatedList.length? '<button class="ghost" id="btn-export">Copier pour Notes / Rappels</button>' : ''}
+      </div>
+    </div>
+    <div class="card">
+      ${items || '<p class="empty">Aucune liste générée pour l\\'instant.</p>'}
+    </div>
+  `;
+}
+
+function generateShoppingList(){
+  const agg = {}; // key: ingredient_id+unite -> {nom, qty, unite}
+  state.planning.forEach(p=>{
+    if(!p.recette_id || !selectedDays.has(p.jour)) return;
+    const portions = parseInt(p.portions) || parseInt(recetteById(p.recette_id)?.portions_base) || 4;
+    riForRecette(p.recette_id).forEach(ri=>{
+      const ing = ingredientById(ri.ingredient_id);
+      if(!ing) return;
+      const qty = scaledQty(ri, portions);
+      const key = ri.ingredient_id + '|' + ing.unite_reference;
+      if(!agg[key]) agg[key] = {ingredient_id: ri.ingredient_id, nom: ing.nom, qty:0, unite: ing.unite_reference};
+      agg[key].qty += qty;
+    });
+  });
+  generatedList = Object.values(agg).sort((a,b)=>a.nom.localeCompare(b.nom)).map(it=>({...it, checked:false}));
+}
+
+function exportText(){
+  return generatedList.map(it=>`• ${it.nom} — ${round1(it.qty)} ${it.unite}`).join('\n');
+}
+
+/* ================== HANDLERS ================== */
+function attachHandlers(){
+  // recettes
+  document.querySelectorAll('[data-open]').forEach(el=>{
+    el.onclick = ()=>{ openRecipeId = el.dataset.open; render(); };
+  });
+  const back = document.getElementById('btn-back');
+  if(back) back.onclick = ()=>{ openRecipeId=null; render(); };
+
+  const plus = document.getElementById('btn-plus');
+  const minus = document.getElementById('btn-minus');
+  if(plus) plus.onclick = ()=>{ workingPortions[openRecipeId] = (workingPortions[openRecipeId]|| parseInt(recetteById(openRecipeId).portions_base)) + 1; render(); };
+  if(minus) minus.onclick = ()=>{ const cur = workingPortions[openRecipeId]|| parseInt(recetteById(openRecipeId).portions_base); if(cur>1){ workingPortions[openRecipeId] = cur-1; render(); } };
+
+  document.querySelectorAll('[data-lock]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const riId = btn.dataset.lock;
+      const input = document.querySelector(`[data-ri-qty="${riId}"]`);
+      const newQty = parseFloat(input.value);
+      const portions = workingPortions[openRecipeId] || parseInt(recetteById(openRecipeId).portions_base);
+      const ri = state.recetteIngredients.find(r=>r.id===riId);
+      ri.quantite_reference = newQty;
+      ri.portions_reference = portions;
+      ri.verrouille = "VRAI";
+      setStatus("Enregistrement...");
+      await apiPost('saveRecipeIngredient', {data: ri});
+      setStatus("Quantité mise à jour ✓");
+      render();
+    };
+  });
+
+  const btnNew = document.getElementById('btn-new-recipe');
+  if(btnNew) btnNew.onclick = ()=> alert("La création de nouvelle recette se fait pour l'instant directement dans le Google Sheet (onglets Recettes + Recette_Ingredients). On pourra ajouter un formulaire dans l'outil à l'étape suivante si tu veux.");
+
+  // planning
+  document.querySelectorAll('[data-plan-jour]').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const jour = sel.dataset.planJour, creneau = sel.dataset.planCreneau;
+      let p = planningRow(jour,creneau);
+      if(!p){ return; }
+      p.recette_id = sel.value;
+      setStatus("Enregistrement du planning...");
+      await apiPost('savePlanningCell', {data:p});
+      setStatus("Planning à jour ✓");
+    };
+  });
+
+  // courses
+  document.querySelectorAll('[data-day]').forEach(chip=>{
+    chip.onclick = ()=>{
+      const d = chip.dataset.day;
+      if(selectedDays.has(d)) selectedDays.delete(d); else selectedDays.add(d);
+      render();
+    };
+  });
+  const gen = document.getElementById('btn-generate');
+  if(gen) gen.onclick = ()=>{ generateShoppingList(); render(); };
+
+  document.querySelectorAll('[data-check]').forEach(cb=>{
+    cb.onchange = ()=>{ generatedList[cb.dataset.check].checked = cb.checked; render(); };
+  });
+
+  const exp = document.getElementById('btn-export');
+  if(exp) exp.onclick = ()=>{
+    const text = exportText();
+    const modal = document.createElement('div');
+    modal.className='modal-bg';
+    modal.innerHTML = `<div class="modal">
+      <h3>Copier la liste</h3>
+      <p style="color:var(--text-dim);">Sélectionne le texte ci-dessous et copie-le (Cmd+C), puis colle-le dans Notes ou Rappels.</p>
+      <textarea class="export" readonly>${text}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:12px;">
+        <button class="primary" id="close-modal">Fermer</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('textarea').focus();
+    modal.querySelector('textarea').select();
+    document.getElementById('close-modal').onclick = ()=> modal.remove();
+  };
+}
+
+/* ================== INIT ================== */
+loadAll();
+</script>
+</body>
+</html>
