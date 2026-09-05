@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mes repas & courses</title>
+<title>OrgaRepas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -174,6 +174,8 @@
   .planning-grid .head{color:var(--wood);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 4px;}
   .planning-grid .slot-label{color:var(--text-dim);padding:8px 4px;}
   .planning-grid select{width:100%;font-size:12px;padding:6px 8px;}
+  .planning-grid{align-items:center;}
+  .planning-grid > div{padding-top:4px;padding-bottom:4px;}
   .day-check{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;}
   .day-check.active{border-color:var(--copper);color:var(--wood);}
   .shopping-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);}
@@ -190,7 +192,7 @@
 
 <header>
   <p class="tag">Cuisine & planning</p>
-  <h1>Mes repas & courses</h1>
+  <h1>OrgaRepas</h1>
 </header>
 
 <nav id="nav"></nav>
@@ -208,6 +210,8 @@ let state = { ingredients: [], recettes: [], recetteIngredients: [], planning: [
 let currentTab = 'recettes';
 let openRecipeId = null;
 let workingPortions = {}; // recette_id -> portions actuellement affichees
+let editingRecipe = false;
+let addingIngredient = false;
 
 /* ================== API HELPERS ================== */
 async function apiGet(action){
@@ -257,12 +261,24 @@ function scaledQty(ri, portions){
   return ref / refPortions * portions;
 }
 
+// convertit une quantite (dans l'unite du couple recette-ingredient) vers l'unite de reference
+// de l'ingredient, en utilisant le poids standard par unite si besoin (ex: "2 oignons" -> 200g)
+function toReferenceUnit(qty, ri, ing){
+  if(ri.unite === ing.unite_reference) return qty;
+  if(ri.unite === 'unite' && ing.unite_reference !== 'unite'){
+    const poids = parseFloat(ing.poids_unite_g) || 0;
+    return qty * poids; // -> grammes/ml
+  }
+  return qty; // cas non gere, on renvoie tel quel
+}
+
 // contribution nutrition d'une ligne ingredient, pour 1 personne
 function nutritionPerPersonForRow(ri){
   const ing = ingredientById(ri.ingredient_id);
   if(!ing) return {cal:0,prot:0,gluc:0,lip:0};
   const perPersonQty = scaledQty(ri, 1);
-  const factor = ing.unite_reference === 'unite' ? perPersonQty : perPersonQty/100;
+  const qtyRef = toReferenceUnit(perPersonQty, ri, ing);
+  const factor = ing.unite_reference === 'unite' ? qtyRef : qtyRef/100;
   return {
     cal: factor * (parseFloat(ing.calories_100)||0),
     prot: factor * (parseFloat(ing.proteines_100g)||0),
@@ -330,10 +346,74 @@ function renderRecipeDetail(id){
       <div class="ingredient-row" data-ri="${ri.id}">
         <span class="name">${ing? ing.nom : ri.ingredient_id}</span>
         <input class="qty" type="number" step="any" value="${round1(qty)}" data-ri-qty="${ri.id}">
-        <span style="width:34px;color:var(--text-dim);font-size:12px;">${ing?ing.unite_reference:''}</span>
+        <span style="width:34px;color:var(--text-dim);font-size:12px;">${ri.unite||''}</span>
         <button class="lock-btn" data-lock="${ri.id}" title="Forcer cette quantité pour ${portions} personnes">🔒</button>
+        <button class="lock-btn" data-delete-ri="${ri.id}" title="Supprimer cet ingrédient">🗑</button>
       </div>`;
   }).join('');
+
+  const addIngredientBlock = addingIngredient ? `
+    <div class="card" style="margin-top:12px;background:var(--surface-2);">
+      <label>Ingrédient</label>
+      <select id="new-ri-ingredient" style="width:100%;margin-bottom:10px;">
+        ${state.ingredients.map(i=>`<option value="${i.id}">${i.nom}</option>`).join('')}
+      </select>
+      <div class="row">
+        <div>
+          <label>Quantité (pour ${portions} pers.)</label>
+          <input type="number" step="any" id="new-ri-qty" value="1">
+        </div>
+        <div>
+          <label>Unité</label>
+          <select id="new-ri-unite">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="unite">unité</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button class="primary" id="btn-confirm-add-ingredient">Ajouter</button>
+        <button class="ghost" id="btn-cancel-add-ingredient">Annuler</button>
+      </div>
+    </div>` : `<button class="ghost" id="btn-add-ingredient" style="margin-top:10px;">+ Ajouter un ingrédient</button>`;
+
+  const prepBlock = editingRecipe ? `
+    <div class="card">
+      <label>Nom</label>
+      <input type="text" id="edit-nom" value="${r.nom}" style="width:100%;margin-bottom:10px;">
+      <div class="row" style="margin-bottom:10px;">
+        <div>
+          <label>Type</label>
+          <select id="edit-type">
+            ${['Plat','Accompagnement','Entrée'].map(t=>`<option value="${t}" ${r.type===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Portions de base</label>
+          <input type="number" id="edit-portions-base" value="${r.portions_base}">
+        </div>
+        <div>
+          <label>Temps (min)</label>
+          <input type="number" id="edit-temps" value="${r.temps_preparation_min||''}">
+        </div>
+      </div>
+      <label>Préparation</label>
+      <textarea id="edit-etapes" style="width:100%;height:140px;">${r.etapes||''}</textarea>
+      <div class="row" style="margin-top:12px;">
+        <button class="primary" id="btn-save-recipe-text">Enregistrer</button>
+        <button class="ghost" id="btn-cancel-edit-recipe">Annuler</button>
+      </div>
+    </div>
+  ` : `
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <h3>Préparation</h3>
+        <button class="ghost" id="btn-edit-recipe">Modifier</button>
+      </div>
+      <p style="color:var(--text-dim);white-space:pre-line;">${r.etapes||'—'}</p>
+    </div>
+  `;
 
   return `
     <button class="ghost" id="btn-back" style="margin-bottom:16px;">← Retour aux recettes</button>
@@ -352,6 +432,7 @@ function renderRecipeDetail(id){
 
       <h3 style="margin-top:20px;">Ingrédients</h3>
       ${ingRows || '<p class="empty">Aucun ingrédient.</p>'}
+      ${addIngredientBlock}
 
       <div class="nutri-grid">
         <div class="nutri-item"><div class="val">${Math.round(nutri.cal)}</div><div class="lbl">kcal / pers.</div></div>
@@ -361,10 +442,7 @@ function renderRecipeDetail(id){
       </div>
     </div>
 
-    <div class="card">
-      <h3>Préparation</h3>
-      <p style="color:var(--text-dim);white-space:pre-line;">${r.etapes||'—'}</p>
-    </div>
+    ${prepBlock}
   `;
 }
 
@@ -373,6 +451,17 @@ function round1(n){ return Math.round(n*10)/10; }
 /* ================== PLANNING ================== */
 function planningRow(jour, creneau){
   return state.planning.find(p=>p.jour===jour && p.creneau===creneau);
+}
+
+function dayTotals(jour){
+  return CRENEAUX.reduce((acc,cr)=>{
+    const p = planningRow(jour,cr);
+    if(p && p.recette_id){
+      const n = nutritionTotalsPerPerson(p.recette_id);
+      acc.cal+=n.cal; acc.prot+=n.prot; acc.gluc+=n.gluc; acc.lip+=n.lip;
+    }
+    return acc;
+  },{cal:0,prot:0,gluc:0,lip:0});
 }
 
 function renderPlanningTab(){
@@ -387,10 +476,27 @@ function renderPlanningTab(){
     return `<div class="slot-label">${CRENEAUX_LABEL[cr]}</div>${cells}`;
   }).join('');
 
+  const totalRow = `<div class="slot-label" style="color:var(--wood);">Total / pers.</div>` + JOURS.map(j=>{
+    const t = dayTotals(j);
+    return `<div style="font-size:11px;color:var(--text-dim);text-align:center;line-height:1.5;">
+      <strong style="color:var(--text);">${Math.round(t.cal)}</strong> kcal<br>
+      P ${round1(t.prot)}g · G ${round1(t.gluc)}g · L ${round1(t.lip)}g
+    </div>`;
+  }).join('');
+
+  const semaine = localStorage.getItem('orgarepas_semaine') || '';
+
   return `
-    <h2>Planning de la semaine</h2>
+    <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:16px;">
+      <div>
+        <h2 style="margin-bottom:8px;">Planning de la semaine</h2>
+        <label>Numéro de semaine</label>
+        <input type="number" id="input-semaine" value="${semaine}" style="width:90px;">
+      </div>
+      <button class="ghost" id="btn-reset-planning">Réinitialiser le planning</button>
+    </div>
     <div class="card" style="overflow-x:auto;">
-      <div class="planning-grid">${headRow}${bodyRows}</div>
+      <div class="planning-grid">${headRow}${bodyRows}${totalRow}</div>
     </div>
   `;
 }
@@ -452,10 +558,10 @@ function exportText(){
 function attachHandlers(){
   // recettes
   document.querySelectorAll('[data-open]').forEach(el=>{
-    el.onclick = ()=>{ openRecipeId = el.dataset.open; render(); };
+    el.onclick = ()=>{ openRecipeId = el.dataset.open; editingRecipe=false; addingIngredient=false; render(); };
   });
   const back = document.getElementById('btn-back');
-  if(back) back.onclick = ()=>{ openRecipeId=null; render(); };
+  if(back) back.onclick = ()=>{ openRecipeId=null; editingRecipe=false; addingIngredient=false; render(); };
 
   const plus = document.getElementById('btn-plus');
   const minus = document.getElementById('btn-minus');
@@ -482,7 +588,81 @@ function attachHandlers(){
   const btnNew = document.getElementById('btn-new-recipe');
   if(btnNew) btnNew.onclick = ()=> alert("La création de nouvelle recette se fait pour l'instant directement dans le Google Sheet (onglets Recettes + Recette_Ingredients). On pourra ajouter un formulaire dans l'outil à l'étape suivante si tu veux.");
 
+  // edition texte recette
+  const btnEdit = document.getElementById('btn-edit-recipe');
+  if(btnEdit) btnEdit.onclick = ()=>{ editingRecipe = true; render(); };
+  const btnCancelEdit = document.getElementById('btn-cancel-edit-recipe');
+  if(btnCancelEdit) btnCancelEdit.onclick = ()=>{ editingRecipe = false; render(); };
+  const btnSaveRecipeText = document.getElementById('btn-save-recipe-text');
+  if(btnSaveRecipeText) btnSaveRecipeText.onclick = async ()=>{
+    const r = recetteById(openRecipeId);
+    r.nom = document.getElementById('edit-nom').value;
+    r.type = document.getElementById('edit-type').value;
+    r.portions_base = document.getElementById('edit-portions-base').value;
+    r.temps_preparation_min = document.getElementById('edit-temps').value;
+    r.etapes = document.getElementById('edit-etapes').value;
+    setStatus("Enregistrement...");
+    await apiPost('saveRecipe', {data:r});
+    editingRecipe = false;
+    setStatus("Recette mise à jour ✓");
+    render();
+  };
+
+  // suppression ingredient
+  document.querySelectorAll('[data-delete-ri]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const riId = btn.dataset.deleteRi;
+      if(!confirm("Supprimer cet ingrédient de la recette ?")) return;
+      setStatus("Suppression...");
+      await apiPost('deleteRecipeIngredient', {id: riId});
+      state.recetteIngredients = state.recetteIngredients.filter(r=>r.id!==riId);
+      setStatus("Ingrédient supprimé ✓");
+      render();
+    };
+  });
+
+  // ajout ingredient
+  const btnAddIng = document.getElementById('btn-add-ingredient');
+  if(btnAddIng) btnAddIng.onclick = ()=>{ addingIngredient = true; render(); };
+  const btnCancelAdd = document.getElementById('btn-cancel-add-ingredient');
+  if(btnCancelAdd) btnCancelAdd.onclick = ()=>{ addingIngredient = false; render(); };
+  const btnConfirmAdd = document.getElementById('btn-confirm-add-ingredient');
+  if(btnConfirmAdd) btnConfirmAdd.onclick = async ()=>{
+    const ingredientId = document.getElementById('new-ri-ingredient').value;
+    const qty = parseFloat(document.getElementById('new-ri-qty').value) || 0;
+    const unite = document.getElementById('new-ri-unite').value;
+    const portions = workingPortions[openRecipeId] || parseInt(recetteById(openRecipeId).portions_base);
+    const maxNum = state.recetteIngredients.reduce((m,r)=>{
+      const n = parseInt((r.id||'').replace('RI',''))||0;
+      return Math.max(m,n);
+    },0);
+    const newId = 'RI' + String(maxNum+1).padStart(3,'0');
+    const newRow = {
+      id:newId, recette_id: openRecipeId, ingredient_id: ingredientId,
+      quantite_reference: qty, unite: unite, portions_reference: portions, verrouille:"FAUX"
+    };
+    setStatus("Ajout en cours...");
+    await apiPost('saveRecipeIngredient', {data:newRow});
+    state.recetteIngredients.push(newRow);
+    addingIngredient = false;
+    setStatus("Ingrédient ajouté ✓");
+    render();
+  };
+
   // planning
+  const inputSemaine = document.getElementById('input-semaine');
+  if(inputSemaine) inputSemaine.onchange = ()=>{
+    localStorage.setItem('orgarepas_semaine', inputSemaine.value);
+  };
+  const btnReset = document.getElementById('btn-reset-planning');
+  if(btnReset) btnReset.onclick = async ()=>{
+    if(!confirm("Vider tout le planning de la semaine ? Cette action est irréversible.")) return;
+    setStatus("Remise à zéro du planning...");
+    await apiPost('resetPlanning', {});
+    state.planning.forEach(p=>{ p.recette_id=''; p.portions=''; });
+    setStatus("Planning réinitialisé ✓");
+    render();
+  };
   document.querySelectorAll('[data-plan-jour]').forEach(sel=>{
     sel.onchange = async ()=>{
       const jour = sel.dataset.planJour, creneau = sel.dataset.planCreneau;
