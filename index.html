@@ -213,6 +213,10 @@ let workingPortions = {}; // recette_id -> portions actuellement affichees
 let editingRecipe = false;
 let addingIngredient = false;
 let creatingIngredient = false;
+let creatingRecipe = false;
+let newRecipeDraft = null;
+let draftAddingIngredient = false;
+let draftCreatingIngredient = false;
 
 /* ================== API HELPERS ================== */
 async function apiGet(action){
@@ -273,6 +277,13 @@ function toReferenceUnit(qty, ri, ing){
   return qty; // cas non gere, on renvoie tel quel
 }
 
+// parseFloat "safe" : ignore les valeurs non numériques (ex. dates mal importées depuis Sheets)
+function safeNum(v){
+  if(typeof v === 'string' && !/^-?\d+(\.\d+)?$/.test(v.trim())) return 0;
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
 // contribution nutrition d'une ligne ingredient, pour 1 personne
 function nutritionPerPersonForRow(ri){
   const ing = ingredientById(ri.ingredient_id);
@@ -281,10 +292,10 @@ function nutritionPerPersonForRow(ri){
   const qtyRef = toReferenceUnit(perPersonQty, ri, ing);
   const factor = ing.unite_reference === 'unite' ? qtyRef : qtyRef/100;
   return {
-    cal: factor * (parseFloat(ing.calories_100)||0),
-    prot: factor * (parseFloat(ing.proteines_100g)||0),
-    gluc: factor * (parseFloat(ing.glucides_100g)||0),
-    lip: factor * (parseFloat(ing.lipides_100g)||0)
+    cal: factor * safeNum(ing.calories_100),
+    prot: factor * safeNum(ing.proteines_100g),
+    gluc: factor * safeNum(ing.glucides_100g),
+    lip: factor * safeNum(ing.lipides_100g)
   };
 }
 
@@ -304,7 +315,7 @@ function render(){
   nav.innerHTML = tabs.map(([id,label])=>
     `<button class="${currentTab===id?'active':''}" data-tab="${id}">${label}</button>`
   ).join('');
-  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; openRecipeId=null; render();});
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; openRecipeId=null; creatingRecipe=false; render();});
 
   const main = document.getElementById('main');
   if(currentTab==='recettes') main.innerHTML = renderRecettesTab();
@@ -316,6 +327,7 @@ function render(){
 
 /* ================== RECETTES ================== */
 function renderRecettesTab(){
+  if(creatingRecipe) return renderNewRecipeForm();
   if(openRecipeId) return renderRecipeDetail(openRecipeId);
   const cards = state.recettes.map(r=>`
     <div class="recipe-card" data-open="${r.id}">
@@ -332,7 +344,112 @@ function renderRecettesTab(){
   `;
 }
 
+function newIngredientMiniForm(prefix){
+  return `
+    <div class="card" style="margin-top:10px;background:var(--bg);border-color:var(--wood-soft);">
+      <h3 style="font-size:15px;">Nouvel ingrédient</h3>
+      <label>Nom</label>
+      <input type="text" id="${prefix}-ing-nom" style="width:100%;margin-bottom:10px;" placeholder="ex. Potiron">
+      <div class="row" style="margin-bottom:10px;">
+        <div>
+          <label>Catégorie</label>
+          <input type="text" id="${prefix}-ing-categorie" value="Legumes">
+        </div>
+        <div>
+          <label>Unité de référence</label>
+          <select id="${prefix}-ing-unite-ref">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="unite">unite</option>
+          </select>
+        </div>
+        <div>
+          <label>Poids d'1 unité (g)</label>
+          <input type="number" step="any" id="${prefix}-ing-poids-unite" placeholder="optionnel">
+        </div>
+      </div>
+      <p style="color:var(--text-dim);font-size:12px;">Valeurs pour 100g/100ml (ou par unité) :</p>
+      <div class="row">
+        <div><label>Calories</label><input type="number" step="any" id="${prefix}-ing-cal" value="0"></div>
+        <div><label>Protéines (g)</label><input type="number" step="any" id="${prefix}-ing-prot" value="0"></div>
+        <div><label>Glucides (g)</label><input type="number" step="any" id="${prefix}-ing-gluc" value="0"></div>
+        <div><label>Lipides (g)</label><input type="number" step="any" id="${prefix}-ing-lip" value="0"></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button class="primary" id="btn-confirm-${prefix}-ing">Créer et sélectionner</button>
+        <button class="ghost" id="btn-cancel-${prefix}-ing">Annuler</button>
+      </div>
+    </div>`;
+}
+
+function renderNewRecipeForm(){
+  const d = newRecipeDraft;
+  const ingRows = d.ingredients.map((row,idx)=>{
+    const ing = ingredientById(row.ingredient_id);
+    return `
+      <div class="ingredient-row">
+        <span class="name">${ing?ing.nom:row.ingredient_id}</span>
+        <span class="qty">${row.quantite_reference}</span>
+        <span style="width:40px;color:var(--text-dim);font-size:12px;">${row.unite}</span>
+        <button class="lock-btn" data-draft-delete="${idx}" title="Supprimer">🗑</button>
+      </div>`;
+  }).join('');
+
+  const addPanel = draftAddingIngredient ? `
+    <div class="card" style="margin-top:12px;background:var(--surface-2);">
+      <label>Ingrédient</label>
+      <select id="draft-ri-ingredient" style="width:100%;margin-bottom:4px;">
+        ${state.ingredients.map(i=>`<option value="${i.id}">${i.nom}</option>`).join('')}
+      </select>
+      ${draftCreatingIngredient ? newIngredientMiniForm('draft') : `<button class="ghost" id="btn-toggle-draft-new-ing" style="margin-top:6px;font-size:12px;">+ Créer un nouvel ingrédient</button>`}
+      <div class="row" style="margin-top:10px;">
+        <div><label>Quantité (pour ${d.portions_base} pers.)</label><input type="number" step="any" id="draft-ri-qty" value="1"></div>
+        <div><label>Unité</label>
+          <select id="draft-ri-unite">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="unite">unité</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button class="primary" id="btn-confirm-draft-add">Ajouter</button>
+        <button class="ghost" id="btn-cancel-draft-add">Annuler</button>
+      </div>
+    </div>` : `<button class="ghost" id="btn-draft-add-ingredient" style="margin-top:10px;">+ Ajouter un ingrédient</button>`;
+
+  return `
+    <button class="ghost" id="btn-cancel-new-recipe" style="margin-bottom:16px;">← Annuler</button>
+    <h2>Nouvelle recette</h2>
+    <div class="card">
+      <label>Nom</label>
+      <input type="text" id="draft-nom" value="${d.nom}" style="width:100%;margin-bottom:10px;">
+      <div class="row" style="margin-bottom:10px;">
+        <div><label>Type</label>
+          <select id="draft-type">
+            ${['Plat','Accompagnement','Entrée'].map(t=>`<option value="${t}" ${d.type===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div><label>Portions de base</label><input type="number" id="draft-portions-base" value="${d.portions_base}"></div>
+        <div><label>Temps (min)</label><input type="number" id="draft-temps" value="${d.temps_preparation_min}"></div>
+      </div>
+
+      <h3 style="margin-top:16px;">Ingrédients</h3>
+      ${ingRows || '<p class="empty">Aucun ingrédient ajouté.</p>'}
+      ${addPanel}
+
+      <label style="margin-top:16px;">Préparation</label>
+      <textarea id="draft-etapes" style="width:100%;height:140px;">${d.etapes}</textarea>
+
+      <div class="row" style="margin-top:16px;">
+        <button class="primary" id="btn-save-new-recipe">Créer la recette</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderRecipeDetail(id){
+
   const r = recetteById(id);
   if(!r) { openRecipeId=null; return renderRecettesTab(); }
   const base = parseInt(r.portions_base)||4;
@@ -627,7 +744,109 @@ function attachHandlers(){
   });
 
   const btnNew = document.getElementById('btn-new-recipe');
-  if(btnNew) btnNew.onclick = ()=> alert("La création de nouvelle recette se fait pour l'instant directement dans le Google Sheet (onglets Recettes + Recette_Ingredients). On pourra ajouter un formulaire dans l'outil à l'étape suivante si tu veux.");
+  if(btnNew) btnNew.onclick = ()=>{
+    creatingRecipe = true;
+    newRecipeDraft = { nom:'', type:'Plat', portions_base:4, temps_preparation_min:'', etapes:'', ingredients: [] };
+    draftAddingIngredient = false;
+    draftCreatingIngredient = false;
+    render();
+  };
+  const btnCancelNewRecipe = document.getElementById('btn-cancel-new-recipe');
+  if(btnCancelNewRecipe) btnCancelNewRecipe.onclick = ()=>{ creatingRecipe=false; newRecipeDraft=null; render(); };
+
+  // ajout ingredient (existant ou nouveau) dans le brouillon de recette
+  const btnDraftAddIng = document.getElementById('btn-draft-add-ingredient');
+  if(btnDraftAddIng) btnDraftAddIng.onclick = ()=>{ draftAddingIngredient = true; render(); };
+  const btnCancelDraftAdd = document.getElementById('btn-cancel-draft-add');
+  if(btnCancelDraftAdd) btnCancelDraftAdd.onclick = ()=>{ draftAddingIngredient=false; draftCreatingIngredient=false; render(); };
+
+  const btnToggleDraftNewIng = document.getElementById('btn-toggle-draft-new-ing');
+  if(btnToggleDraftNewIng) btnToggleDraftNewIng.onclick = ()=>{ draftCreatingIngredient = true; render(); };
+  const btnCancelDraftIng = document.getElementById('btn-cancel-draft-ing');
+  if(btnCancelDraftIng) btnCancelDraftIng.onclick = ()=>{ draftCreatingIngredient = false; render(); };
+
+  const btnConfirmDraftIng = document.getElementById('btn-confirm-draft-ing');
+  if(btnConfirmDraftIng) btnConfirmDraftIng.onclick = async ()=>{
+    const nom = document.getElementById('draft-ing-nom').value.trim();
+    if(!nom){ alert("Merci d'indiquer un nom."); return; }
+    const maxNum = state.ingredients.reduce((m,i)=>Math.max(m, parseInt((i.id||'').replace('ING',''))||0),0);
+    const newId = 'ING' + String(maxNum+1).padStart(3,'0');
+    const newIng = {
+      id:newId, nom, categorie: document.getElementById('draft-ing-categorie').value || 'Autres',
+      unite_reference: document.getElementById('draft-ing-unite-ref').value,
+      calories_100: document.getElementById('draft-ing-cal').value || 0,
+      proteines_100g: document.getElementById('draft-ing-prot').value || 0,
+      glucides_100g: document.getElementById('draft-ing-gluc').value || 0,
+      lipides_100g: document.getElementById('draft-ing-lip').value || 0,
+      fibres_100g: 0,
+      poids_unite_g: document.getElementById('draft-ing-poids-unite').value || ''
+    };
+    setStatus("Création de l'ingrédient...");
+    await apiPost('saveIngredient', {data:newIng});
+    state.ingredients.push(newIng);
+    draftCreatingIngredient = false;
+    render();
+    const sel = document.getElementById('draft-ri-ingredient');
+    if(sel) sel.value = newId;
+    setStatus("Ingrédient créé ✓");
+  };
+
+  const btnConfirmDraftAdd = document.getElementById('btn-confirm-draft-add');
+  if(btnConfirmDraftAdd) btnConfirmDraftAdd.onclick = ()=>{
+    const ingredientId = document.getElementById('draft-ri-ingredient').value;
+    const qty = parseFloat(document.getElementById('draft-ri-qty').value) || 0;
+    const unite = document.getElementById('draft-ri-unite').value;
+    newRecipeDraft.ingredients.push({ingredient_id: ingredientId, quantite_reference: qty, unite});
+    draftAddingIngredient = false;
+    draftCreatingIngredient = false;
+    render();
+  };
+
+  document.querySelectorAll('[data-draft-delete]').forEach(btn=>{
+    btn.onclick = ()=>{
+      newRecipeDraft.ingredients.splice(parseInt(btn.dataset.draftDelete),1);
+      render();
+    };
+  });
+
+  const btnSaveNewRecipe = document.getElementById('btn-save-new-recipe');
+  if(btnSaveNewRecipe) btnSaveNewRecipe.onclick = async ()=>{
+    const nom = document.getElementById('draft-nom').value.trim();
+    if(!nom){ alert("Merci d'indiquer un nom de recette."); return; }
+    newRecipeDraft.nom = nom;
+    newRecipeDraft.type = document.getElementById('draft-type').value;
+    newRecipeDraft.portions_base = document.getElementById('draft-portions-base').value || 4;
+    newRecipeDraft.temps_preparation_min = document.getElementById('draft-temps').value;
+    newRecipeDraft.etapes = document.getElementById('draft-etapes').value;
+
+    const maxRec = state.recettes.reduce((m,r)=>Math.max(m, parseInt((r.id||'').replace('REC',''))||0),0);
+    const newRecId = 'REC' + String(maxRec+1).padStart(3,'0');
+    const recipeData = {
+      id:newRecId, nom:newRecipeDraft.nom, type:newRecipeDraft.type,
+      portions_base:newRecipeDraft.portions_base, temps_preparation_min:newRecipeDraft.temps_preparation_min,
+      etapes:newRecipeDraft.etapes
+    };
+    setStatus("Enregistrement de la recette...");
+    await apiPost('saveRecipe', {data:recipeData});
+    state.recettes.push(recipeData);
+
+    let maxRi = state.recetteIngredients.reduce((m,r)=>Math.max(m, parseInt((r.id||'').replace('RI',''))||0),0);
+    for(const row of newRecipeDraft.ingredients){
+      maxRi++;
+      const riRow = {
+        id:'RI'+String(maxRi).padStart(3,'0'), recette_id:newRecId, ingredient_id:row.ingredient_id,
+        quantite_reference:row.quantite_reference, unite:row.unite, portions_reference:newRecipeDraft.portions_base, verrouille:"FAUX"
+      };
+      await apiPost('saveRecipeIngredient', {data:riRow});
+      state.recetteIngredients.push(riRow);
+    }
+
+    creatingRecipe = false;
+    newRecipeDraft = null;
+    openRecipeId = newRecId;
+    setStatus("Recette créée ✓");
+    render();
+  };
 
   // edition texte recette
   const btnEdit = document.getElementById('btn-edit-recipe');
