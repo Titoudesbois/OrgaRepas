@@ -572,7 +572,10 @@ function renderRecipeDetail(id){
   `;
 
   return `
-    <button class="ghost" id="btn-back" style="margin-bottom:16px;">← Retour aux recettes</button>
+    <div class="row" style="justify-content:space-between;margin-bottom:16px;">
+      <button class="ghost" id="btn-back">← Retour aux recettes</button>
+      <button class="ghost" id="btn-duplicate-recipe" data-dup="${id}">⧉ Dupliquer cette recette</button>
+    </div>
     <h2>${r.nom}</h2>
     <p style="color:var(--text-dim);margin-top:0;">${r.type} · ${r.temps_preparation_min||'?'} min</p>
 
@@ -720,6 +723,40 @@ function attachHandlers(){
   });
   const back = document.getElementById('btn-back');
   if(back) back.onclick = ()=>{ openRecipeId=null; editingRecipe=false; addingIngredient=false; render(); };
+
+  const btnDup = document.getElementById('btn-duplicate-recipe');
+  if(btnDup) btnDup.onclick = async ()=>{
+    const original = recetteById(btnDup.dataset.dup);
+    if(!original) return;
+    const maxRec = state.recettes.reduce((m,r)=>Math.max(m, parseInt((r.id||'').replace('REC',''))||0),0);
+    const newRecId = 'REC' + String(maxRec+1).padStart(3,'0');
+    const copy = {
+      id:newRecId, nom: original.nom + ' (copie)', type: original.type,
+      portions_base: original.portions_base, temps_preparation_min: original.temps_preparation_min,
+      etapes: original.etapes
+    };
+    setStatus("Duplication en cours...");
+    await apiPost('saveRecipe', {data:copy});
+    state.recettes.push(copy);
+
+    let maxRi = state.recetteIngredients.reduce((m,r)=>Math.max(m, parseInt((r.id||'').replace('RI',''))||0),0);
+    const originalRows = riForRecette(original.id);
+    for(const row of originalRows){
+      maxRi++;
+      const newRow = {
+        id:'RI'+String(maxRi).padStart(3,'0'), recette_id:newRecId, ingredient_id:row.ingredient_id,
+        quantite_reference:row.quantite_reference, unite:row.unite,
+        portions_reference:row.portions_reference, verrouille:row.verrouille
+      };
+      await apiPost('saveRecipeIngredient', {data:newRow});
+      state.recetteIngredients.push(newRow);
+    }
+
+    openRecipeId = newRecId;
+    editingRecipe = true; // pour renommer/ajuster tout de suite
+    setStatus("Recette dupliquée ✓ — modifie le nom puis enregistre.");
+    render();
+  };
 
   const plus = document.getElementById('btn-plus');
   const minus = document.getElementById('btn-minus');
