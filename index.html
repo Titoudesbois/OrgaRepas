@@ -217,6 +217,9 @@ let creatingRecipe = false;
 let newRecipeDraft = null;
 let draftAddingIngredient = false;
 let draftCreatingIngredient = false;
+let ingredientEditingId = null;
+let ingredientCreatingTab = false;
+let ingredientSearch = '';
 
 /* ================== API HELPERS ================== */
 async function apiGet(action){
@@ -311,16 +314,17 @@ function nutritionTotalsPerPerson(recetteId){
 /* ================== RENDER: NAV ================== */
 function render(){
   const nav = document.getElementById('nav');
-  const tabs = [['recettes','Recettes'],['planning','Planning'],['courses','Liste de courses']];
+  const tabs = [['recettes','Recettes'],['planning','Planning'],['courses','Liste de courses'],['ingredients','Ingrédients']];
   nav.innerHTML = tabs.map(([id,label])=>
     `<button class="${currentTab===id?'active':''}" data-tab="${id}">${label}</button>`
   ).join('');
-  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; openRecipeId=null; creatingRecipe=false; render();});
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; openRecipeId=null; creatingRecipe=false; ingredientEditingId=null; ingredientCreatingTab=false; render();});
 
   const main = document.getElementById('main');
   if(currentTab==='recettes') main.innerHTML = renderRecettesTab();
   if(currentTab==='planning') main.innerHTML = renderPlanningTab();
   if(currentTab==='courses') main.innerHTML = renderCoursesTab();
+  if(currentTab==='ingredients') main.innerHTML = renderIngredientsTab();
   main.insertAdjacentHTML('beforeend', `<p class="status" id="status"></p>`);
   attachHandlers();
 }
@@ -662,7 +666,74 @@ function renderPlanningTab(){
   `;
 }
 
-/* ================== LISTE DE COURSES ================== */
+/* ================== INGREDIENTS (onglet dedie) ================== */
+function ingredientRowView(ing){
+  if(ingredientEditingId === ing.id){
+    return `
+      <tr data-ing-edit-row="${ing.id}">
+        <td><input type="text" data-edit-ing-nom="${ing.id}" value="${ing.nom}" style="width:140px;"></td>
+        <td><input type="text" data-edit-ing-cat="${ing.id}" value="${ing.categorie||''}" style="width:100px;"></td>
+        <td>
+          <select data-edit-ing-uniteref="${ing.id}">
+            <option value="g" ${ing.unite_reference==='g'?'selected':''}>g</option>
+            <option value="ml" ${ing.unite_reference==='ml'?'selected':''}>ml</option>
+            <option value="unite" ${ing.unite_reference==='unite'?'selected':''}>unite</option>
+          </select>
+        </td>
+        <td><input type="number" step="any" data-edit-ing-cal="${ing.id}" value="${ing.calories_100||0}" style="width:60px;"></td>
+        <td><input type="number" step="any" data-edit-ing-prot="${ing.id}" value="${ing.proteines_100g||0}" style="width:55px;"></td>
+        <td><input type="number" step="any" data-edit-ing-gluc="${ing.id}" value="${ing.glucides_100g||0}" style="width:55px;"></td>
+        <td><input type="number" step="any" data-edit-ing-lip="${ing.id}" value="${ing.lipides_100g||0}" style="width:55px;"></td>
+        <td><input type="number" step="any" data-edit-ing-poids="${ing.id}" value="${ing.poids_unite_g||''}" style="width:55px;" placeholder="—"></td>
+        <td style="white-space:nowrap;">
+          <button class="icon" data-save-ing="${ing.id}" title="Enregistrer">✓</button>
+          <button class="icon" data-cancel-edit-ing="${ing.id}" title="Annuler">✕</button>
+        </td>
+      </tr>`;
+  }
+  return `
+    <tr>
+      <td>${ing.nom}</td>
+      <td style="color:var(--text-dim);">${ing.categorie||''}</td>
+      <td style="color:var(--text-dim);">${ing.unite_reference}</td>
+      <td>${ing.calories_100||0}</td>
+      <td>${ing.proteines_100g||0}</td>
+      <td>${ing.glucides_100g||0}</td>
+      <td>${ing.lipides_100g||0}</td>
+      <td style="color:var(--text-dim);">${ing.poids_unite_g||'—'}</td>
+      <td style="white-space:nowrap;">
+        <button class="icon" data-edit-ing="${ing.id}" title="Modifier">✎</button>
+        <button class="icon" data-delete-ing="${ing.id}" title="Supprimer">🗑</button>
+      </td>
+    </tr>`;
+}
+
+function renderIngredientsTab(){
+  const filtered = state.ingredients.filter(i=> i.nom.toLowerCase().includes(ingredientSearch.toLowerCase()));
+  const rows = filtered.sort((a,b)=>a.nom.localeCompare(b.nom)).map(ingredientRowView).join('');
+
+  const createPanel = ingredientCreatingTab ? `
+    <div style="margin-bottom:16px;">${newIngredientMiniForm('tab')}</div>
+  ` : `<button class="primary" id="btn-tab-new-ingredient" style="margin-bottom:16px;">+ Nouvel ingrédient</button>`;
+
+  return `
+    <div class="row" style="justify-content:space-between;margin-bottom:16px;">
+      <h2>Ingrédients (${state.ingredients.length})</h2>
+      <input type="text" id="ingredient-search" placeholder="Rechercher..." value="${ingredientSearch}" style="width:200px;">
+    </div>
+    ${createPanel}
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Nom</th><th>Catégorie</th><th>Unité</th><th>Kcal/100</th><th>Prot./100g</th><th>Gluc./100g</th><th>Lip./100g</th><th>Poids/unité (g)</th><th></th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="9" class="empty">Aucun ingrédient trouvé.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+
 let selectedDays = new Set(JOURS);
 let generatedList = [];
 
@@ -717,6 +788,80 @@ function exportText(){
 
 /* ================== HANDLERS ================== */
 function attachHandlers(){
+  // onglet Ingredients
+  const ingSearch = document.getElementById('ingredient-search');
+  if(ingSearch) ingSearch.oninput = ()=>{ ingredientSearch = ingSearch.value; render(); document.getElementById('ingredient-search').focus(); document.getElementById('ingredient-search').setSelectionRange(ingredientSearch.length, ingredientSearch.length); };
+
+  const btnTabNewIng = document.getElementById('btn-tab-new-ingredient');
+  if(btnTabNewIng) btnTabNewIng.onclick = ()=>{ ingredientCreatingTab = true; render(); };
+  const btnCancelTabIng = document.getElementById('btn-cancel-tab-ing');
+  if(btnCancelTabIng) btnCancelTabIng.onclick = ()=>{ ingredientCreatingTab = false; render(); };
+  const btnConfirmTabIng = document.getElementById('btn-confirm-tab-ing');
+  if(btnConfirmTabIng) btnConfirmTabIng.onclick = async ()=>{
+    const nom = document.getElementById('tab-ing-nom').value.trim();
+    if(!nom){ alert("Merci d'indiquer un nom."); return; }
+    const maxNum = state.ingredients.reduce((m,i)=>Math.max(m, parseInt((i.id||'').replace('ING',''))||0),0);
+    const newId = 'ING' + String(maxNum+1).padStart(3,'0');
+    const newIng = {
+      id:newId, nom, categorie: document.getElementById('tab-ing-categorie').value || 'Autres',
+      unite_reference: document.getElementById('tab-ing-unite-ref').value,
+      calories_100: document.getElementById('tab-ing-cal').value || 0,
+      proteines_100g: document.getElementById('tab-ing-prot').value || 0,
+      glucides_100g: document.getElementById('tab-ing-gluc').value || 0,
+      lipides_100g: document.getElementById('tab-ing-lip').value || 0,
+      fibres_100g: 0,
+      poids_unite_g: document.getElementById('tab-ing-poids-unite').value || ''
+    };
+    setStatus("Création en cours...");
+    await apiPost('saveIngredient', {data:newIng});
+    state.ingredients.push(newIng);
+    ingredientCreatingTab = false;
+    setStatus("Ingrédient créé ✓");
+    render();
+  };
+
+  document.querySelectorAll('[data-edit-ing]').forEach(btn=>{
+    btn.onclick = ()=>{ ingredientEditingId = btn.dataset.editIng; render(); };
+  });
+  document.querySelectorAll('[data-cancel-edit-ing]').forEach(btn=>{
+    btn.onclick = ()=>{ ingredientEditingId = null; render(); };
+  });
+  document.querySelectorAll('[data-save-ing]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.saveIng;
+      const ing = ingredientById(id);
+      ing.nom = document.querySelector(`[data-edit-ing-nom="${id}"]`).value;
+      ing.categorie = document.querySelector(`[data-edit-ing-cat="${id}"]`).value;
+      ing.unite_reference = document.querySelector(`[data-edit-ing-uniteref="${id}"]`).value;
+      ing.calories_100 = document.querySelector(`[data-edit-ing-cal="${id}"]`).value;
+      ing.proteines_100g = document.querySelector(`[data-edit-ing-prot="${id}"]`).value;
+      ing.glucides_100g = document.querySelector(`[data-edit-ing-gluc="${id}"]`).value;
+      ing.lipides_100g = document.querySelector(`[data-edit-ing-lip="${id}"]`).value;
+      ing.poids_unite_g = document.querySelector(`[data-edit-ing-poids="${id}"]`).value;
+      setStatus("Enregistrement...");
+      await apiPost('saveIngredient', {data:ing});
+      ingredientEditingId = null;
+      setStatus("Ingrédient mis à jour ✓");
+      render();
+    };
+  });
+  document.querySelectorAll('[data-delete-ing]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.deleteIng;
+      const usedIn = state.recetteIngredients.filter(ri=>ri.ingredient_id===id);
+      if(usedIn.length>0){
+        if(!confirm(`Cet ingrédient est utilisé dans ${usedIn.length} ligne(s) de recette. Le supprimer quand même ?`)) return;
+      } else {
+        if(!confirm("Supprimer cet ingrédient ?")) return;
+      }
+      setStatus("Suppression...");
+      await apiPost('deleteIngredient', {id});
+      state.ingredients = state.ingredients.filter(i=>i.id!==id);
+      setStatus("Ingrédient supprimé ✓");
+      render();
+    };
+  });
+
   // recettes
   document.querySelectorAll('[data-open]').forEach(el=>{
     el.onclick = ()=>{ openRecipeId = el.dataset.open; editingRecipe=false; addingIngredient=false; render(); };
